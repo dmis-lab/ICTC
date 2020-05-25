@@ -1,3 +1,5 @@
+This repository is a implementation of paper Bipartite Link Prediction by Intra-class connection based Triadic Closure.
+
 ICTC is a bipartite link prediction method.\
 Note: to run this model, please use python version above 3.0.
 
