@@ -1,13 +1,50 @@
-This repository is a implementation of paper Bipartite Link Prediction by Intra-class connection based Triadic Closure.
+# ICTC
 
-ICTC is a bipartite link prediction method.\
-Note: to run this model, please use python version above 3.0.
+Implementation of **Bipartite Link Prediction by Intra-class Connection based Triadic Closure**.
 
-To run the model, please first select one dataset from args.py while commenting out the ones that you are not using.\
-You have three model choices. 
+ICTC is a bipartite link prediction method that combines Graph Autoencoders (GAE, LGAE) with triadic closure. This repository also includes **BiSPM** (Bipartite Spectral Perturbation Method) and **SRNMF** (Similarity-regularized NMF) for comparison.
 
-To run ICTC, python train.py. This will run GAE,LGAE,ICTC.\
-To run BiSPM, python bispm.py \
-To run SRNMF, choose one similarity measure which is one of [CN, JC,CPA] by selecting one from srnmf.py. (i.e. args.similarity = 'srnmf_cn') then python srnmf.py
+**Requirements:** Python 3.x
 
+## Setup
 
+Before running, select a dataset in `ictc/config.py` by uncommenting the desired line (and commenting out others). Available datasets: `gpcr`, `enzyme`, `ionchannel`, `malaria`, `drug`, `sw`, `nanet`, `movie100k`.
+
+## Running the Models
+
+```bash
+# ICTC (runs GAE, LGAE, and combined ICTC)
+python train.py
+
+# BiSPM (Bipartite Spectral Perturbation Method)
+python run_bispm.py
+
+# SRNMF — set similarity in run_srnmf.py first: 'srnmf_cn', 'srnmf_jc', or 'srnmf_cpa'
+python run_srnmf.py
+```
+
+## Dependencies
+
+`torch`, `networkx`, `scipy`, `scikit-learn`, `numpy`, `matplotlib`, `seaborn`, `nimfa`, `sparsesvd`
+
+## Project Structure
+
+```
+ICTC/
+├── ictc/                    # Main package
+│   ├── config.py            # Dataset selection and hyperparameters
+│   ├── models/
+│   │   ├── gae.py           # GAE, LGAE, VGAE
+│   │   ├── bispm.py         # BiSPM
+│   │   └── srnmf.py         # SRNMF
+│   ├── data/
+│   │   ├── loading.py       # Data loaders
+│   │   └── preprocessing.py # Graph preprocessing
+│   └── evaluation/
+│       └── metrics.py       # ROC-AUC, AP, Precision@k
+├── train.py                 # Entry point for ICTC
+├── run_bispm.py             # Entry point for BiSPM
+├── run_srnmf.py             # Entry point for SRNMF
+├── data_analysis.py         # Analysis script
+└── data/                    # Datasets (bipartite edge lists, etc.)
+```
