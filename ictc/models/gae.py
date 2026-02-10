@@ -6,7 +6,7 @@ from torch.autograd import Variable
 import os
 import numpy as np
 
-import args
+from ictc import config as args
 
 class VGAE(nn.Module):
 	def __init__(self, adj):
@@ -31,7 +31,7 @@ class VGAE(nn.Module):
 class GraphConvSparse(nn.Module):
 	def __init__(self, input_dim, output_dim, adj, activation = F.relu, **kwargs):
 		super(GraphConvSparse, self).__init__(**kwargs)
-		self.weight = glorot_init(input_dim, output_dim) 
+		self.weight = glorot_init(input_dim, output_dim)
 		self.adj = adj
 		self.activation = activation
 

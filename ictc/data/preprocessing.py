@@ -1,7 +1,7 @@
 '''
 ****************NOTE*****************
 CREDITS : Thomas Kipf
-since datasets are the same as those in kipf's implementation, 
+since datasets are the same as those in kipf's implementation,
 Their preprocessing source was used as-is.
 *************************************
 '''
@@ -9,11 +9,10 @@ import numpy as np
 import scipy.sparse as sp
 import pickle
 import torch
-import args
 import time
 
-from input_data import *
-from preprocessing import *
+from ictc import config as args
+from ictc.data.loading import load_data, load_data_drug, load_data_citation
 
 def sparse_to_tuple(sparse_mx):
     if not sp.isspmatrix_coo(sparse_mx):
@@ -38,7 +37,7 @@ def preprocess_graph_numpy(adj):
     degree_mat_inv_sqrt = sp.diags(np.power(rowsum, -0.5).flatten())
     adj_normalized = adj_.dot(degree_mat_inv_sqrt).transpose().dot(degree_mat_inv_sqrt).tocoo()
     return adj_normalized.toarray()
-    
+
 def getMaskForBiAdjanceyMatrix():
     top_left = np.zeros((len(u2id),len(u2id)))
     bottom_left = np.ones((len(v2id),len(u2id)))
@@ -51,8 +50,8 @@ def getMaskForBiAdjanceyMatrix():
     adj_unnormalized = np.concatenate((left, right),axis=1)
     adj_unnormalized = sp.csr_matrix(adj_unnormalized)
     adj_unnormalized = sparse_to_tuple(adj_unnormalized)
-    adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T), 
-                                torch.FloatTensor(adj_unnormalized[1]), 
+    adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T),
+                                torch.FloatTensor(adj_unnormalized[1]),
                                 torch.Size(adj_unnormalized[2]))
     return adj_unnormalized
 
@@ -198,7 +197,7 @@ def mask_bipartite_perturbation_test_edges(adj):
     print('~isSetMember(val_edges, test_edges) is True')
     assert ~isSetValidMember(val_edges_false, test_edges_false)
     print('~isSetMember(val_edges_false, test_edges_false) is True')
-    
+
     print('len(train_edges): ',len(train_edges))
     print('len(val_edges): ',len(val_edges))
     print('len(test_edges): ',len(test_edges))
@@ -215,13 +214,13 @@ def get_data(dataset):
     if dataset == 'citeseer' or dataset == 'cora' or dataset == 'pubmed':
         adj, features = load_data_citation(args.dataset)
         adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false, edges_all,edges_false_all = mask_bipartite_perturbation_test_edges(adj)
-    
+
     if dataset == 'ionchannel' or args.dataset == 'enzyme' or args.dataset == 'gpcr' or \
         args.dataset == 'movie100k' or args.dataset == 'sw' or args.dataset == 'movie1m' or \
         args.dataset =='malaria' or args.dataset=='nanet' or args.dataset == 'c2o':
         adj, features = load_data(args.dataset)
         adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false, edges_all, edges_false_all = mask_bipartite_perturbation_test_edges(adj)
-    
+
     if dataset == 'drug':
         adj, features = load_data_drug(args.dataset)
         adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false, edges_all, edges_false_all = mask_bipartite_perturbation_test_edges(adj)

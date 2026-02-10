@@ -10,7 +10,7 @@ dataset = 'drug'
 # dataset = 'movie100k'
 
 model1 = 'LGAE'
-model2 = 'GAE' 
+model2 = 'GAE'
 
 # input_dim1 = 318 # gpcr bipartite
 # input_dim1 = 1109 # enzyme bipartite
@@ -34,7 +34,7 @@ hidden1_dim = 32
 hidden2_dim = 16
 
 numexp = 10
-num_test = 10./1. # 10/1 means 10% means 10% is used as test sets., 10/2 means 20% is used as test sets. 
+num_test = 10./1. # 10/1 means 10% means 10% is used as test sets., 10/2 means 20% is used as test sets.
 
 weight_seed = 100
 edge_idx_seed = 100

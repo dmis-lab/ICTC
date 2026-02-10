@@ -1,7 +1,7 @@
 '''
 ****************NOTE*****************
 CREDITS : Thomas Kipf
-since datasets are the same as those in kipf's implementation, 
+since datasets are the same as those in kipf's implementation,
 Their preprocessing source was used as-is.
 *************************************
 '''
@@ -14,339 +14,19 @@ import scipy.sparse as sp
 from scipy.sparse import csr_matrix
 from collections import defaultdict
 from statistics import mean
+import torch
+import pickle
 
-from postprocessing import *
-from preprocessing import *
-from input_data import *
+from ictc import config as args
+from ictc.data.preprocessing import sparse_to_tuple, preprocess_graph, get_data
+from ictc.evaluation.metrics import get_scores
+from ictc.data.loading import (load_data_fd_neg, load_data_fd, load_data_citation,
+    load_data_featureless, load_data_cora_bp, load_data_pubmed_bp, load_data_citeseer_bp,
+    parse_index_file)
 
-def parse_index_file(filename):
-    index = []
-    for line in open(filename):
-        index.append(int(line.strip()))
-    return index
-
-def load_data_fd_neg(dataset):
-    with open("data/fd_neg/id2disease.pickle", 'rb') as f:
-        id2disease = pkl.load(f)
-    with open("data/fd_neg/id2ingredient.pickle", 'rb') as f:
-        id2ingredient = pkl.load(f)
-
-    total_number_nodes = len(id2disease) + len(id2ingredient)
-    print('total_number_nodes:',total_number_nodes)
-
-    row = np.array([x for x in range(total_number_nodes)])
-    col = np.array([x for x in range(total_number_nodes)])
-    data = np.array([1 for x in range(total_number_nodes)])
-    whole_x = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes))
-    # print('x:',x)
-    idx = int(whole_x.shape[0]*0.9)
-
-    x = whole_x[:idx,:]
-    tx = whole_x[idx:,:]
-    allx = x
-
-    f = open("data/fd_neg/edgelist_neg", 'r')
-    graph = defaultdict(list)
-    number_of_edges = 0
-    for line in f:
-        number_of_edges += 1
-        edge = line.strip('\n').split(' ')
-        graph[int(edge[0])].append(int(edge[1]))
-    # print(graph)
-
-    features = sp.vstack((allx, tx)).tolil()
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-
-    G=nx.from_dict_of_lists(graph)
-    degree_of_node = list(G.degree(G.nodes()))
-    degree_of_node = [b for (a,b) in degree_of_node]
-    degree_of_node = mean(degree_of_node)
-    print('degree_of_node:',degree_of_node)
-    print('number of edges: ', len(G.edges()))
-    print('number of nodes: ', len(G.nodes()))
-
-    # row = np.array([x for x in range(total_number_nodes)])
-    # col = np.array([x for x in range(total_number_nodes)])
-    # data = np.random.uniform(low=-1, high=1, size=(total_number_nodes,))
-    # features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes))
-
-    print(adj.shape)
-    print(features.shape)
-
-    return adj, features
-def load_data_fd(dataset):
-    with open("data/fd/id2disease.pickle", 'rb') as f:
-        id2disease = pkl.load(f)
-    with open("data/fd/id2ingredient.pickle", 'rb') as f:
-        id2ingredient = pkl.load(f)
-
-    total_number_nodes = len(id2disease) + len(id2ingredient)
-    print('total_number_nodes:',total_number_nodes)
-
-    row = np.array([x for x in range(total_number_nodes)])
-    col = np.array([x for x in range(total_number_nodes)])
-    data = np.array([1 for x in range(total_number_nodes)])
-    whole_x = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes))
-    # print('x:',x)
-    idx = int(whole_x.shape[0]*0.9)
-
-    x = whole_x[:idx,:]
-    tx = whole_x[idx:,:]
-    allx = x
-
-    f = open("data/fd/edgelist", 'r')
-    graph = defaultdict(list)
-    for line in f:
-        edge = line.strip('\n').split(' ')
-        graph[int(edge[0])].append(int(edge[1]))
-    # print(graph)
-
-    features = sp.vstack((allx, tx)).tolil()
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-
-
-    G=nx.from_dict_of_lists(graph)
-    degree_of_node = list(G.degree(G.nodes()))
-    degree_of_node = [b for (a,b) in degree_of_node]
-    degree_of_node = mean(degree_of_node)
-    print('degree_of_node:',degree_of_node)
-    print('number of edges: ', len(G.edges()))
-    print('number of nodes: ', len(G.nodes()))
-    # print(type(adj))
-    # print((adj!=adj.T).nnz==0)
-
-    # row = np.array([x for x in range(total_number_nodes)])
-    # col = np.array([x for x in range(total_number_nodes)])
-    # data = np.random.uniform(low=-1, high=1, size=(total_number_nodes,))
-    # features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes))
-
-    print(adj.shape)
-    print(features.shape)
-
-    return adj, features
-
-def load_data(dataset):
-    # load the data: x, tx, allx, graph
-    names = ['x', 'tx', 'allx', 'graph']
-    objects = []
-    for i in range(len(names)):
-        with open("data/ind.{}.{}".format(dataset, names[i]), 'rb') as f:
-            if sys.version_info > (3, 0):
-                objects.append(pkl.load(f, encoding='latin1'))
-            else:
-                objects.append(pkl.load(f))
-    x, tx, allx, graph = tuple(objects)
-    test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset))
-    test_idx_range = np.sort(test_idx_reorder)
-    # print('x:',x.shape)
-    # print('tx:',tx.shape)
-    # print('allx:',allx)
-    # print('graph:',graph)
-
-    if dataset == 'citeseer':
-        # Fix citeseer dataset (there are some isolated nodes in the graph)
-        # Find isolated nodes, add them as zero-vecs into the right position
-        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder)+1)
-        tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
-        tx_extended[test_idx_range-min(test_idx_range), :] = tx
-        tx = tx_extended
-
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-
-    # total_number_nodes = len(graph.keys())
-    # print(total_number_nodes)
-    # row = np.array([x for x in range(total_number_nodes)])
-    # col = np.array([x for x in range(total_number_nodes)])
-    # data = np.array([1 for x in range(total_number_nodes)])
-    # features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes)).tolil()
-    features = sp.vstack((allx, tx)).tolil()
-    features[test_idx_reorder, :] = features[test_idx_range, :]
-    print(adj.shape)
-    print(features.shape)
-    # exit()
-    return adj, features
-
-def load_data_featureless(dataset):
-    # load the data: x, tx, allx, graph
-    names = ['x', 'tx', 'allx', 'graph']
-    objects = []
-    for i in range(len(names)):
-        with open("data/ind.{}.{}".format(dataset, names[i]), 'rb') as f:
-            if sys.version_info > (3, 0):
-                objects.append(pkl.load(f, encoding='latin1'))
-            else:
-                objects.append(pkl.load(f))
-    x, tx, allx, graph = tuple(objects)
-    test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset))
-    test_idx_range = np.sort(test_idx_reorder)
-    # print('x:',x.shape)
-    # print('tx:',tx.shape)
-    # print('allx:',allx)
-    # print('graph:',graph)
-
-    if dataset == 'citeseer':
-        # Fix citeseer dataset (there are some isolated nodes in the graph)
-        # Find isolated nodes, add them as zero-vecs into the right position
-        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder)+1)
-        tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
-        tx_extended[test_idx_range-min(test_idx_range), :] = tx
-        tx = tx_extended
-
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-
-    total_number_nodes = adj.shape[0]
-    print(total_number_nodes)
-    row = np.array([x for x in range(total_number_nodes)])
-    col = np.array([x for x in range(total_number_nodes)])
-    data = np.array([1 for x in range(total_number_nodes)])
-    features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes)).tolil()
-    # features = sp.vstack((allx, tx)).tolil()
-    features[test_idx_reorder, :] = features[test_idx_range, :]
-    print(adj.shape)
-    print(features.shape)
-    # exit()
-    return adj, features
-
-
-
-def load_data_cora_bp(dataset):
-
-    f = open("data/bipartite/edgelist_cora_bp", 'r')
-    graph = defaultdict(list)
-    for line in f:
-        edge = line.strip('\n').split('\t')
-        graph[int(edge[0])].append(int(edge[1]))
-    # print(graph)
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-    # features = sp.vstack((allx, tx)).tolil()
-
-    total_number_nodes = adj.shape[0]
-    print(total_number_nodes)
-    row = np.array([x for x in range(total_number_nodes)])
-    col = np.array([x for x in range(total_number_nodes)])
-    data = np.array([1 for x in range(total_number_nodes)])
-    features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes)).tolil()
-    
-    print(adj.shape)
-    print(features.shape)
-
-
-    G=nx.from_dict_of_lists(graph)
-    degree_of_node = list(G.degree(G.nodes()))
-    degree_of_node = [b for (a,b) in degree_of_node]
-    degree_of_node = mean(degree_of_node)
-    print('degree_of_node:',degree_of_node)
-    print('number of edges: ', len(G.edges()))
-    print('number of nodes: ', len(G.nodes()))
-    # exit()
-    return adj, features
-
-
-def load_data_pubmed_bp(dataset):
-    # load the data: x, tx, allx, graph
-    names = ['x', 'tx', 'allx', 'graph']
-    objects = []
-    for i in range(len(names)):
-        with open("data/ind.{}.{}".format(dataset, names[i]), 'rb') as f:
-            if sys.version_info > (3, 0):
-                objects.append(pkl.load(f, encoding='latin1'))
-            else:
-                objects.append(pkl.load(f))
-    x, tx, allx, graph = tuple(objects)
-    test_idx_reorder = parse_index_file("data/ind.{}.test.index".format(dataset))
-    test_idx_range = np.sort(test_idx_reorder)
-
-    f = open("data/bipartite/edgelist_pubmed_bp", 'r')
-    graph = defaultdict(list)
-    for line in f:
-        edge = line.strip('\n').split('\t')
-        graph[int(edge[0])].append(int(edge[1]))
-    # print(graph)
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-    # features = sp.vstack((allx, tx)).tolil()
-
-    total_number_nodes = adj.shape[0]
-    print(total_number_nodes)
-    row = np.array([x for x in range(total_number_nodes)])
-    col = np.array([x for x in range(total_number_nodes)])
-    data = np.array([1 for x in range(total_number_nodes)])
-    features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes)).tolil()
-    
-    print(adj.shape)
-    print(features.shape)
-    # exit()
-    return adj, features
-
-
-def load_data_citeseer_bp(dataset):
-
-    f = open("data/bipartite/edgelist_citeseer_bp", 'r')
-    graph = defaultdict(list)
-    for line in f:
-        edge = line.strip('\n').split('\t')
-        graph[int(edge[0])].append(int(edge[1]))
-    # print(graph)
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-    # features = sp.vstack((allx, tx)).tolil()
-    total_number_nodes = adj.shape[0]
-    print(total_number_nodes)
-    row = np.array([x for x in range(total_number_nodes)])
-    col = np.array([x for x in range(total_number_nodes)])
-    data = np.array([1 for x in range(total_number_nodes)])
-    features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes)).tolil()
-    # features[test_idx_reorder, :] = features[test_idx_range, :]
-
-    print(adj.shape)
-    print(features.shape)
-
-
-    G=nx.from_dict_of_lists(graph)
-    degree_of_node = list(G.degree(G.nodes()))
-    degree_of_node = [b for (a,b) in degree_of_node]
-    degree_of_node = mean(degree_of_node)
-    print('degree_of_node:',degree_of_node)
-    print('number of edges: ', len(G.edges()))
-    print('number of nodes: ', len(G.nodes()))
-    # exit()
-    return adj, features
-
-
-def load_data_pubmed_bp(dataset):
-
-    f = open("data/bipartite/edgelist_pubmed_bp", 'r')
-    graph = defaultdict(list)
-    for line in f:
-        edge = line.strip('\n').split('\t')
-        graph[int(edge[0])].append(int(edge[1]))
-    # print(graph)
-    adj = nx.adjacency_matrix(nx.from_dict_of_lists(graph))
-    # features = sp.vstack((allx, tx)).tolil()
-    total_number_nodes = adj.shape[0]
-    print(total_number_nodes)
-    row = np.array([x for x in range(total_number_nodes)])
-    col = np.array([x for x in range(total_number_nodes)])
-    data = np.array([1 for x in range(total_number_nodes)])
-    features = csr_matrix((data, (row, col)), shape=(total_number_nodes, total_number_nodes)).tolil()
-    # features[test_idx_reorder, :] = features[test_idx_range, :]
-
-    print(adj.shape)
-    print(features.shape)
-
-
-    G=nx.from_dict_of_lists(graph)
-    degree_of_node = list(G.degree(G.nodes()))
-    degree_of_node = [b for (a,b) in degree_of_node]
-    degree_of_node = mean(degree_of_node)
-    print('degree_of_node:',degree_of_node)
-    print('number of edges: ', len(G.edges()))
-    print('number of nodes: ', len(G.nodes()))
-    print('number of edges percentage: ', len(G.edges())/(len(G.nodes())*len(G.nodes())))
-
-    # exit()
-    return adj, features
 
 def check_implicit_connection():
-    
+
     adj, features,\
         adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false, edges_all, edges_false_all = get_data(args.dataset)
 
@@ -364,13 +44,13 @@ def check_implicit_connection():
     reconstructed_matrix.tolil().setdiag(np.zeros(reconstructed_matrix.shape[0]))
     reconstructed_matrix = preprocess_graph(reconstructed_matrix)
 
-    reconstructed_matrix = torch.sparse.FloatTensor(torch.LongTensor(reconstructed_matrix[0].T), 
-                                torch.FloatTensor(reconstructed_matrix[1]), 
+    reconstructed_matrix = torch.sparse.FloatTensor(torch.LongTensor(reconstructed_matrix[0].T),
+                                torch.FloatTensor(reconstructed_matrix[1]),
                                 torch.Size(reconstructed_matrix[2]))
     reconstructed_matrix = reconstructed_matrix.to_dense().numpy()
 
 
-    adj_orig = adj  
+    adj_orig = adj
     adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
     adj_orig.eliminate_zeros()
 
@@ -382,27 +62,27 @@ def check_implicit_connection():
     num_features = features[2][1]
     features_nonzero = features[1].shape[0]
 
-    features = torch.sparse.FloatTensor(torch.LongTensor(features[0].T), 
-                                torch.FloatTensor(features[1]), 
+    features = torch.sparse.FloatTensor(torch.LongTensor(features[0].T),
+                                torch.FloatTensor(features[1]),
                                 torch.Size(features[2]))
-    
+
     # Some preprocessing
     adj_norm = preprocess_graph(adj)
     adj_sparse_norm = adj_norm
-    adj_norm = torch.sparse.FloatTensor(torch.LongTensor(adj_norm[0].T), 
-                                torch.FloatTensor(adj_norm[1]), 
+    adj_norm = torch.sparse.FloatTensor(torch.LongTensor(adj_norm[0].T),
+                                torch.FloatTensor(adj_norm[1]),
                                 torch.Size(adj_norm[2]))
 
     adj_label = adj_train + sp.eye(adj_train.shape[0])
     adj_label = sparse_to_tuple(adj_label)
-    adj_label = torch.sparse.FloatTensor(torch.LongTensor(adj_label[0].T), 
-                                torch.FloatTensor(adj_label[1]), 
+    adj_label = torch.sparse.FloatTensor(torch.LongTensor(adj_label[0].T),
+                                torch.FloatTensor(adj_label[1]),
                                 torch.Size(adj_label[2]))
 
     adj_unnormalized = sp.coo_matrix(adj)
     adj_unnormalized = sparse_to_tuple(adj_unnormalized)
-    adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T), 
-                                torch.FloatTensor(adj_unnormalized[1]), 
+    adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T),
+                                torch.FloatTensor(adj_unnormalized[1]),
                                 torch.Size(adj_unnormalized[2]))
     print(type(np.array(adj_sparse_norm)))
     print(type(reconstructed_matrix))
@@ -496,12 +176,12 @@ def check_implicit_connection():
     print(pos_val_3/len(edges_all))
     print(neg_val_3/len(edges_false_all))
 
-        
-def merge(dict1, dict2): 
+
+def merge(dict1, dict2):
     return {**dict1, **dict2}
 
 def check_symmetric(a, rtol=1e-05, atol=1e-08):
-    return np.allclose(a, a.T, rtol=rtol, atol=atol) 
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
 def check_2hop_connection():
     # args.dataset = 'fdpos'
 
@@ -513,15 +193,15 @@ def check_2hop_connection():
     reconstructed_matrix = sp.csr_matrix((data, indices, indptr), shape=shape)
     reconstructed_matrix = preprocess_graph(reconstructed_matrix)
 
-    reconstructed_matrix = torch.sparse.FloatTensor(torch.LongTensor(reconstructed_matrix[0].T), 
-                                torch.FloatTensor(reconstructed_matrix[1]), 
+    reconstructed_matrix = torch.sparse.FloatTensor(torch.LongTensor(reconstructed_matrix[0].T),
+                                torch.FloatTensor(reconstructed_matrix[1]),
                                 torch.Size(reconstructed_matrix[2]))
     reconstructed_matrix = reconstructed_matrix.to_dense().numpy()
 
     adj, features,\
         adj_train, train_edges, val_edges, val_edges_false, test_edges, test_edges_false, edges_all, edges_false_all = get_data(args.dataset)
 
-    adj_orig = adj  
+    adj_orig = adj
     adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
     adj_orig.eliminate_zeros()
 
@@ -533,27 +213,27 @@ def check_2hop_connection():
     num_features = features[2][1]
     features_nonzero = features[1].shape[0]
 
-    features = torch.sparse.FloatTensor(torch.LongTensor(features[0].T), 
-                                torch.FloatTensor(features[1]), 
+    features = torch.sparse.FloatTensor(torch.LongTensor(features[0].T),
+                                torch.FloatTensor(features[1]),
                                 torch.Size(features[2]))
-    
+
     # Some preprocessing
     adj_norm = preprocess_graph(adj)
     adj_sparse_norm = adj_norm
-    adj_norm = torch.sparse.FloatTensor(torch.LongTensor(adj_norm[0].T), 
-                                torch.FloatTensor(adj_norm[1]), 
+    adj_norm = torch.sparse.FloatTensor(torch.LongTensor(adj_norm[0].T),
+                                torch.FloatTensor(adj_norm[1]),
                                 torch.Size(adj_norm[2]))
 
     adj_label = adj_train + sp.eye(adj_train.shape[0])
     adj_label = sparse_to_tuple(adj_label)
-    adj_label = torch.sparse.FloatTensor(torch.LongTensor(adj_label[0].T), 
-                                torch.FloatTensor(adj_label[1]), 
+    adj_label = torch.sparse.FloatTensor(torch.LongTensor(adj_label[0].T),
+                                torch.FloatTensor(adj_label[1]),
                                 torch.Size(adj_label[2]))
 
     adj_unnormalized = sp.coo_matrix(adj)
     adj_unnormalized = sparse_to_tuple(adj_unnormalized)
-    adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T), 
-                                torch.FloatTensor(adj_unnormalized[1]), 
+    adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T),
+                                torch.FloatTensor(adj_unnormalized[1]),
                                 torch.Size(adj_unnormalized[2]))
     print(type(np.array(adj_sparse_norm)))
     print(type(reconstructed_matrix))
@@ -599,7 +279,7 @@ def check_2hop_connection():
 
     for index in range(adj_sparse_norm.shape[0]):
         connectivity1 = adj_sparse_norm[cancer_id,:][index]
-        connectivity2 = reconstructed_matrix[:, ingredient_id][index] 
+        connectivity2 = reconstructed_matrix[:, ingredient_id][index]
 
         if connectivity1 != 0 and connectivity2 != 0 :
             middle_node_id = index
@@ -616,7 +296,7 @@ def check_2hop_connection():
 
     for index in range(adj_sparse_norm.shape[0]):
         connectivity1 = adj_sparse_norm[cancer_id,:][index]
-        connectivity2 = reconstructed_matrix[:, ingredient_id][index] 
+        connectivity2 = reconstructed_matrix[:, ingredient_id][index]
 
         if connectivity1 != 0 and connectivity2 != 0 :
             middle_node_id = index
@@ -630,11 +310,10 @@ def check_2hop_connection():
 
 
 
-
 def main():
     # adj, features = load_data_fd_neg('1')
     # adj, features = load_data_fd('cora')
-    # adj, features = load_data('cora')
+    # adj, features = load_data_citation('cora')
     # adj, features = load_data_fd('1')
     # adj, features = load_data_cora_bp('1')
     # adj, features = load_data_citeseer_bp('1')
@@ -643,5 +322,5 @@ def main():
     check_implicit_connection()
     # check_2hop_connection()
 
-    
+
 main()

@@ -10,13 +10,12 @@ from collections import defaultdict
 import numpy as np
 import os
 import time
+from scipy import sparse
 
-from input_data import *
-from preprocessing import *
-from postprocessing import *
-
-import args
-import model
+from ictc.data.preprocessing import sparse_to_tuple, preprocess_graph, get_data
+from ictc.evaluation.metrics import get_acc, get_scores, get_precision
+from ictc import config as args
+from ictc.models import gae as model
 
 
 # Train on CPU (hide GPU) due to memory constraints
@@ -75,7 +74,7 @@ def learn_train_adj(seed, model_name):
     test_precision = get_precision(test_edges, test_edges_false, A_pred, adj_orig, sparse_to_tuple(sparse.csr_matrix(train_edges))[0], u2id,v2id)
     test_roc, test_ap = get_scores(test_edges, test_edges_false, A_pred, adj_orig)
     print(model_name + " End of training!", "test_roc=", "{:.5f}".format(test_roc),
-              "test_ap=", "{:.5f}".format(test_ap), 
+              "test_ap=", "{:.5f}".format(test_ap),
               'test precision=','{:.5f}'.format(test_precision))
 
     learn_train_adj = A_pred.cpu().detach().numpy()
@@ -92,8 +91,8 @@ def run():
     global u2id, v2id, adj_unnormalized
     global adj_orig, adj_norm_first
 
-    print('cuda device= '+ str(args.device))     
-    print('model1= '+ str(args.model1))     
+    print('cuda device= '+ str(args.device))
+    print('model1= '+ str(args.model1))
     print('model2= '+ str(args.model2))
     print('dataset=' + str(args.dataset))
     print('learning rate= '+ str(args.learning_rate))
@@ -121,7 +120,7 @@ def run():
         with open('data/bipartite/id2name/'+ str(args.dataset) +'v2id.pkl', 'rb') as f:
             v2id = pickle.load(f)
 
-        adj_orig = adj  
+        adj_orig = adj
         adj_orig = adj_orig - sp.dia_matrix((adj_orig.diagonal()[np.newaxis, :], [0]), shape=adj_orig.shape)
         adj_orig.eliminate_zeros()
 
@@ -138,14 +137,14 @@ def run():
         pos_weight = float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum()
         norm = adj.shape[0] * adj.shape[0] / float((adj.shape[0] * adj.shape[0] - adj.sum()) * 2)
 
-        features = torch.sparse.FloatTensor(torch.LongTensor(features[0].T), 
-                                    torch.FloatTensor(features[1]), 
+        features = torch.sparse.FloatTensor(torch.LongTensor(features[0].T),
+                                    torch.FloatTensor(features[1]),
                                     torch.Size(features[2]))
-        
+
         # Some preprocessing
         adj_norm = preprocess_graph(adj)
-        adj_norm = torch.sparse.FloatTensor(torch.LongTensor(adj_norm[0].T), 
-                                    torch.FloatTensor(adj_norm[1]), 
+        adj_norm = torch.sparse.FloatTensor(torch.LongTensor(adj_norm[0].T),
+                                    torch.FloatTensor(adj_norm[1]),
                                     torch.Size(adj_norm[2]))
         # Create Model
         pos_weight = float(adj.shape[0] * adj.shape[0] - adj.sum()) / adj.sum()
@@ -157,19 +156,19 @@ def run():
         # adj_label = get_homo_scores(adj_train, u2id, v2id)
         # adj_label = sparse.csr_matrix(adj_label)
         adj_label = sparse_to_tuple(adj_label)
-        adj_label = torch.sparse.FloatTensor(torch.LongTensor(adj_label[0].T), 
-                                    torch.FloatTensor(adj_label[1]), 
+        adj_label = torch.sparse.FloatTensor(torch.LongTensor(adj_label[0].T),
+                                    torch.FloatTensor(adj_label[1]),
                                     torch.Size(adj_label[2]))
 
         # weight_mask = adj_label.to_dense()[0:len(u2id), len(u2id):].contiguous().view(-1) == 1
         weight_mask = adj_label.to_dense().view(-1) == 1
-        weight_tensor = torch.ones(weight_mask.size(0)) 
+        weight_tensor = torch.ones(weight_mask.size(0))
         weight_tensor[weight_mask] = pos_weight
 
         adj_unnormalized = sp.coo_matrix(adj)
         adj_unnormalized = sparse_to_tuple(adj_unnormalized)
-        adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T), 
-                                    torch.FloatTensor(adj_unnormalized[1]), 
+        adj_unnormalized = torch.sparse.FloatTensor(torch.LongTensor(adj_unnormalized[0].T),
+                                    torch.FloatTensor(adj_unnormalized[1]),
                                     torch.Size(adj_unnormalized[2]))
 
 
@@ -183,15 +182,15 @@ def run():
         adj_train_norm = adj_train_norm.toarray()
 
         adj_norm = adj_norm.cpu().to_dense().numpy()
-        
+
         A = np.matmul(adj_norm,adj_train_norm)
         AT = np.transpose(A)
-        A_pred = (A+AT)/2.0 
-        
+        A_pred = (A+AT)/2.0
+
         test_precision = get_precision(test_edges, test_edges_false, A_pred, adj_orig, sparse_to_tuple(sparse.csr_matrix(train_edges))[0], u2id, v2id)
         test_roc, test_ap = get_scores(test_edges, test_edges_false, A_pred, adj_orig)
         print("N2HP model End of training!", "test_roc=", "{:.5f}".format(test_roc),
-              "test_ap=", "{:.5f}".format(test_ap), 
+              "test_ap=", "{:.5f}".format(test_ap),
               'test precision=','{:.5f}'.format(test_precision))
         # exit()
 
@@ -223,8 +222,8 @@ def run():
     mean_precision_pretrain_gae, ste_precision_pretrain_gae = np.mean(test_precision_pretrain_gae_list), np.std(test_precision_pretrain_gae_list)/(args.numexp**(1/2))
 
 
-    print('cuda device= '+ str(args.device))     
-    print('model1= '+ str(args.model1))     
+    print('cuda device= '+ str(args.device))
+    print('model1= '+ str(args.model1))
     print('model2= '+ str(args.model2))
     print('dataset=' + str(args.dataset))
     print('learning rate= '+ str(args.learning_rate))
@@ -244,7 +243,7 @@ def run():
     roc = '{:.1f}'.format(mean_roc_pretrain*100.0)+'+'+'{:.2f}'.format(ste_roc_pretrain*100.0).strip(' ')
     ap = '{:.1f}'.format(mean_ap_pretrain*100.0)+'+'+'{:.2f}'.format(ste_ap_pretrain*100.0).strip(' ')
     prec = '{:.1f}'.format(mean_precision_pretrain*100.0)+'+'+'{:.2f}'.format(ste_precision_pretrain*100.0).strip(' ')
-    
+
     print('LGAE')
     print(roc)
     print(ap)
@@ -261,4 +260,5 @@ def run():
     print(prec)
 
 
-run()
+if __name__ == '__main__':
+    run()

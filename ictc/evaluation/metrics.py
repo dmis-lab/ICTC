@@ -6,14 +6,11 @@ from scipy import sparse
 import networkx as nx
 from scipy.stats import pearsonr
 
-from input_data import *
-from preprocessing import *
-from postprocessing import *
 import pickle
 import math
 
 def sigmoid(x):
-    return 1 / (1 + np.exp(-x))     
+    return 1 / (1 + np.exp(-x))
 def check_symmetric(a, rtol=1e-05, atol=1e-08):
     return np.allclose(a, a.T, rtol=rtol, atol=atol)
 
@@ -44,7 +41,7 @@ def get_precision_scores(edges_pos, edges_neg, adj_rec, adj_orig, adj_norm):
             predicted_to_be_false_but_true.append((e[0],e[1]))
 
         # preds.append(sigmoid(adj_rec[e[0], e[1]].item()))
-        preds.append(adj_rec[e[0], e[1]].item())    
+        preds.append(adj_rec[e[0], e[1]].item())
         pos.append(adj_orig[e[0], e[1]])
 
     preds_neg = []
@@ -250,7 +247,7 @@ def get_cn_scores(adj_train,u2id,v2id):
             S[y,x] = score
         b1+=1
     return S
-    
+
 def get_aa_scores(adj_train,u2id,v2id):
     adj_train_np = adj_train.toarray()
     graph =nx.from_numpy_matrix(adj_train.toarray())
